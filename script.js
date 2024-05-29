@@ -1,4 +1,4 @@
-if (!confirm('Do you want to play a game?')) throw new Error('Game cancelled')
+const lsKey = 'pure_pacer_game_state'
 
 main()
 
@@ -26,43 +26,176 @@ async function playGame(state) {
     state = err
   }
 
-  await endGame(state)
-
   await saveState(null)
+
+  await endGame(state)
+}
+
+async function _startGame() {
+  const confidence = parseInt(prompt('Enter the starting confidence:'))
+
+  if (!(confidence > 0)) throw new RangeError('Invalid confidence')
+  
+  return { confidence, history: [`${confidence}`]}
 }
 
 async function startGame() {
-  const score = parseInt(prompt('Enter the starting score:'))
+  return new Promise(resolve => {
+    const form = createEstimateConfidenceForm()
 
-  if (!(score > 0)) throw new RangeError('Invalid score')
-  
-  return { score, history: [`${score}`]}
+    show(form)
+
+    form.onsubmit = e => {
+      e.preventDefault()
+
+      const state = { confidence: parseInt(form[0].value), history: [] }
+
+      resolve(state)
+    }
+  })
 }
 
-async function play({ score, history: [...history] }) {
-  let shift = parseInt(prompt(`Score: ${score}\n\nWhat's next?`))
+function createEstimateConfidenceForm() {
+  const form = document.createElement('form')
+
+  form.innerHTML = `
+    <label>Estimate your initial confidence at this point
+      <select>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+        <option value="7">7</option>
+        <option value="8">8</option>
+        <option value="9">9</option>
+        <option value="10">10</option>
+      </select>
+    </label>
+    <button>Submit</button>
+  `;
+
+  form.style = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 1em;
+    border: 1px solid;
+  `;
+
+  return form
+}
+
+function show(el) {
+  document.body.replaceChildren(el)
+}
+
+async function play({ confidence, history: [...history] }) {
+  // let shift = parseInt(prompt(`Confidence: ${confidence}\n\nWhat's next?`))
+  let shift = await getNextShift(confidence)
   
-  score += shift
+  confidence += shift
 
   if (shift > 0) shift = '+' + shift
 
   history.push(shift)
   
-  if (score <= 0) throw { score, history }
+  if (confidence <= 0) throw { confidence, history }
 
-  if (isNaN(score)) throw new RangeError('Corrupted score')
+  if (isNaN(confidence)) throw new RangeError('Corrupted confidence')
 
-  return { score, history }
+  return { confidence, history }
 }
 
-async function endGame({ score, history }) {
-  alert(`Game over!\n\nFinal score: ${score}\n\nHistory:\n${history.join('\n')}`)
+async function getNextShift(confidence) {
+  return new Promise(resolve => {
+    const form = createShiftForm(confidence)
+
+    show(form)
+
+    form.onsubmit = e => {
+      e.preventDefault()
+
+      resolve(parseInt(form[0].value))
+    }
+  })
+}
+
+function createShiftForm(confidence) {
+  const form = document.createElement('form')
+
+  form.innerHTML = `
+    <label>Confidence: ${confidence}.<br>What's next?
+      <input type="number" value="0" required>
+    </label>
+    <button>Submit</button>
+  `;
+
+  form.style = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 1em;
+    border: 1px solid;
+  `;
+
+  form[0].style = `
+    width: 4em;
+    text-align: center;
+  `;
+
+  return form
+}
+
+async function endGame({ confidence, history }) {
+  // alert(`Game over!\n\nFinal confidence: ${confidence}\n\nHistory:\n${history.join('\n')}`)
+  await showEndGameMessage(confidence, history)
+}
+
+async function showEndGameMessage(confidence, history) {
+  return new Promise(resolve => {
+    const form = createEndGameMessage(confidence, history)
+
+    show(form)
+
+    form.onsubmit = e => {
+      e.preventDefault()
+
+      resolve()
+    }
+  })
+}
+
+function createEndGameMessage(confidence, history) {
+  const form = document.createElement('form')
+
+  form.innerHTML = `
+    <p>Game over!</p>
+    <p>Final confidence: ${confidence}</p>
+    <p>History:</p>
+    <pre>${history.join('\n')}</pre>
+    <button>OK</button>
+  `;
+
+  form.style = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 1em;
+    border: 1px solid;
+  `;
+
+  return form
 }
 
 async function loadPrevState() {
-  return JSON.parse(localStorage.getItem('state') || 'null')
+  return JSON.parse(localStorage.getItem(lsKey) || 'null')
 }
 
 async function saveState(state) {
-  localStorage.setItem('state', JSON.stringify(state))
+  localStorage.setItem(lsKey, JSON.stringify(state))
 }
